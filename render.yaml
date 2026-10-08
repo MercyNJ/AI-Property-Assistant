@@ -1,0 +1,19 @@
+# Render Blueprint for the API. Frontend deploys separately to Vercel.
+services:
+  - type: web
+    name: bomatech-api
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    # Trust Render's proxy headers so rate limits see each visitor's IP.
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --forwarded-allow-ips="*"
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.8"
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-5.4-mini
+      - key: CORS_ORIGINS
+        sync: false # e.g. https://bomatech.vercel.app

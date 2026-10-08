@@ -1,0 +1,29 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+bomatech-venv/
+.pytest_cache/
+
+# Local database (re-created from data/properties.json)
+*.db
+*.sqlite3
+
+# Node
+node_modules/
+dist/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+docs/
+CLAUDE.md
