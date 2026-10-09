@@ -2,8 +2,13 @@ import httpx
 import openai
 from fastapi.testclient import TestClient
 
+from app.ai.assistant import AssistantError, PropertyAssistant
+from app.ai.conversation_store import ConversationStore
 from app.api.deps import get_assistant
-from tests.conftest import FakeItem, FakeResponse, final, function_call
+from app.config import get_settings
+from app.schemas import PropertySearchFilters
+from app.services import property_service as svc
+from tests.conftest import FakeClient, FakeItem, FakeResponse, final, function_call
 
 
 def test_health(client):
@@ -161,3 +166,48 @@ def test_tool_loop_is_bounded(client, use_fake_ai):
     use_fake_ai(loop)
     r = client.post("/api/chat", json={"message": "loop forever"})
     assert r.status_code == 502 and "rephrasing" in r.json()["detail"]
+
+
+def _search(location: str) -> dict:
+    return {"location": location, "property_type": None, "min_bedrooms": None, "max_bedrooms": None,
+            "min_bathrooms": None, "max_price_kes": None, "furnished": None, "keywords": None,
+            "sort_by": "price_asc", "limit": None}
+
+
+def test_concurrent_turn_on_same_conversation_is_refused(db):
+    store = ConversationStore()
+    outcome = {}
+
+    def overlapping(_):
+        try:
+            assistant.chat(db, "second message", "c1")
+        except AssistantError as exc:
+            outcome["status"] = exc.status_code
+        return final("First reply.", [])
+
+    assistant = PropertyAssistant(FakeClient([overlapping, final("Third reply.", [])]), get_settings(), store)
+    assert assistant.chat(db, "first message", "c1").reply == "First reply."
+    assert outcome["status"] == 409
+    # The first turn was saved and the conversation is free again.
+    assert assistant.chat(db, "third message", "c1").reply == "Third reply."
+    assert [i["content"] for i in store.get("c1").items if i.get("role") == "user"] == [
+        "first message", "third message"]
+
+
+def test_cards_are_limited_to_retained_history(db):
+    store = ConversationStore(max_turns=1)
+    thika_ids = [p.id for p in svc.search_properties(db, PropertySearchFilters(location="Thika")).results]
+    assistant = PropertyAssistant(FakeClient([
+        FakeResponse([function_call("search_properties", _search("Thika"))]),
+        final("Listings in Thika.", thika_ids[:1]),
+        final("That Thika listing again.", thika_ids[:1]),
+        final("And again.", thika_ids[:1]),
+    ]), get_settings(), store)
+
+    first = assistant.chat(db, "Thika rentals", None)
+    cid = first.conversation_id
+    assert [p.id for p in first.properties] == thika_ids[:1]
+    # Turn 1 is still in the history the model saw for turn 2.
+    assert [p.id for p in assistant.chat(db, "show it again", cid).properties] == thika_ids[:1]
+    # Saving turn 2 trimmed turn 1, so its listings are no longer allowed as cards.
+    assert assistant.chat(db, "once more", cid).properties == []

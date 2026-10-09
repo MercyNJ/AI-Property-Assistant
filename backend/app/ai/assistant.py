@@ -9,7 +9,7 @@ from pydantic import BaseModel, ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.ai.conversation_store import ConversationStore
+from app.ai.conversation_store import ConversationBusy, ConversationStore
 from app.ai.prompts import REPLY_SCHEMA, SYSTEM_PROMPT
 from app.ai.tools import TOOLS, run_tool
 from app.config import Settings
@@ -55,6 +55,13 @@ class PropertyAssistant:
     def chat(self, db: Session, message: str, conversation_id: str | None) -> ChatResponse:
         resuming = conversation_id is not None
         conversation_id = conversation_id or self.store.new_id()
+        try:
+            with self.store.turn(conversation_id):
+                return self._chat_turn(db, message, conversation_id, resuming)
+        except ConversationBusy:
+            raise AssistantError("Still answering your previous message. Please wait for it to finish.", 409) from None
+
+    def _chat_turn(self, db: Session, message: str, conversation_id: str, resuming: bool) -> ChatResponse:
         conv = self.store.get(conversation_id)
         # A known ID with no stored history means it expired or the server restarted.
         history_reset = resuming and not conv.items
@@ -68,8 +75,8 @@ class PropertyAssistant:
             log.exception("Database error during chat")
             raise AssistantError("The property database is unavailable right now. Please try again shortly.", 503) from exc
 
-        # Cards only for listings a tool returned in this conversation, so invented IDs never render.
-        conv.seen_property_ids.update(turn.surfaced_ids)
+        # Cards only for listings a tool returned in the retained history, so invented IDs never render.
+        conv.turn_property_ids.append(list(dict.fromkeys(turn.surfaced_ids)))
         allowed = [pid for pid in dict.fromkeys(reply.property_ids) if pid in conv.seen_property_ids]
         properties = svc.get_properties_by_ids(db, allowed)
 
