@@ -45,6 +45,7 @@ Open http://localhost:5173. In development, Vite proxies `/api` to the backend, 
 ```bash
 cd backend
 pytest
+ruff check . && ruff format --check .   # lint and formatting, also run in CI
 ```
 
 The tests replace the OpenAI client with a scripted fake. They need no key and no network, and they cover the tool loop, follow-up history, card ID validation, request validation and error mapping.

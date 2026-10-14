@@ -29,8 +29,14 @@ KEYWORD_ALIASES = {
 KEYWORD_STOP_WORDS = {"a", "an", "and", "the", "with", "has", "have", "of", "or"}
 
 FILTER_FIELDS = (
-    "location", "property_type", "min_bedrooms", "max_bedrooms",
-    "min_bathrooms", "max_price_kes", "furnished", "keywords",
+    "location",
+    "property_type",
+    "min_bedrooms",
+    "max_bedrooms",
+    "min_bathrooms",
+    "max_price_kes",
+    "furnished",
+    "keywords",
 )
 
 
@@ -127,8 +133,9 @@ def _apply_filters(stmt: Select, f: PropertySearchFilters) -> Select:
         # Every term must appear in the title or description.
         for word in _keyword_terms(f.keywords):
             pattern = _contains(word)
-            stmt = stmt.where(or_(Property.title.ilike(pattern, escape="\\"),
-                                  Property.description.ilike(pattern, escape="\\")))
+            stmt = stmt.where(
+                or_(Property.title.ilike(pattern, escape="\\"), Property.description.ilike(pattern, escape="\\"))
+            )
     return stmt
 
 
@@ -180,9 +187,7 @@ def _relaxation_suggestions(db: Session, f: PropertySearchFilters, location_know
             continue
         item: dict = {"remove_criterion": field, "matches_if_removed": n}
         if field == "max_price_kes":
-            item["lowest_matching_price_kes"] = db.scalar(
-                _apply_filters(select(func.min(Property.price_kes)), relaxed)
-            )
+            item["lowest_matching_price_kes"] = db.scalar(_apply_filters(select(func.min(Property.price_kes)), relaxed))
         out.append(item)
     if f.location and not location_known:
         out.insert(0, {"note": f"'{f.location}' is not a location in the listings database."})
@@ -207,8 +212,11 @@ def compare_properties(db: Session, ids: list[int]) -> dict:
     found = get_properties_by_ids(db, list(dict.fromkeys(ids)))
     missing = [i for i in dict.fromkeys(ids) if i not in {p.id for p in found}]
     if len(found) < 2:
-        return {"properties": [p.model_dump() for p in found], "missing_ids": missing,
-                "error": "At least two existing properties are needed for a comparison."}
+        return {
+            "properties": [p.model_dump() for p in found],
+            "missing_ids": missing,
+            "error": "At least two existing properties are needed for a comparison.",
+        }
 
     with_beds = [p for p in found if p.bedrooms > 0]
     return {
@@ -225,7 +233,8 @@ def compare_properties(db: Session, ids: list[int]) -> dict:
                     ({"id": p.id, "kes_per_bedroom": round(p.price_kes / p.bedrooms)} for p in with_beds),
                     key=lambda x: x["kes_per_bedroom"],
                 )
-                if with_beds else None
+                if with_beds
+                else None
             ),
             "furnished_ids": [p.id for p in found if p.furnished],
         },
@@ -233,20 +242,27 @@ def compare_properties(db: Session, ids: list[int]) -> dict:
 
 
 def list_locations(db: Session, query: str | None = None) -> list[LocationSummary]:
-    stmt = select(
-        Property.location,
-        Property.county,
-        func.count(Property.id),
-        func.min(Property.price_kes),
-        func.max(Property.price_kes),
-    ).group_by(Property.location, Property.county).order_by(Property.location)
+    stmt = (
+        select(
+            Property.location,
+            Property.county,
+            func.count(Property.id),
+            func.min(Property.price_kes),
+            func.max(Property.price_kes),
+        )
+        .group_by(Property.location, Property.county)
+        .order_by(Property.location)
+    )
 
     if query:
         # Match locations first so counts and rent ranges cover all of their listings.
         pattern = _contains(query.strip())
         matching = select(Property.location).where(
-            or_(Property.location.ilike(pattern, escape="\\"), Property.county.ilike(pattern, escape="\\"),
-                Property.neighbourhood.ilike(pattern, escape="\\"))
+            or_(
+                Property.location.ilike(pattern, escape="\\"),
+                Property.county.ilike(pattern, escape="\\"),
+                Property.neighbourhood.ilike(pattern, escape="\\"),
+            )
         )
         stmt = stmt.where(Property.location.in_(matching))
 
@@ -255,7 +271,13 @@ def list_locations(db: Session, query: str | None = None) -> list[LocationSummar
         hoods.setdefault(loc, set()).add(hood)
 
     return [
-        LocationSummary(location=loc, county=county, neighbourhoods=sorted(hoods.get(loc, ())),
-                        listing_count=n, min_price_kes=lo, max_price_kes=hi)
+        LocationSummary(
+            location=loc,
+            county=county,
+            neighbourhoods=sorted(hoods.get(loc, ())),
+            listing_count=n,
+            min_price_kes=lo,
+            max_price_kes=hi,
+        )
         for loc, county, n, lo, hi in db.execute(stmt).all()
     ]

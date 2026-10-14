@@ -24,8 +24,7 @@ def _prune(stamps: deque[float], cutoff: float) -> deque[float]:
 
 
 class ChatRateLimiter:
-    def __init__(self, per_minute: int, per_day: int, global_per_day: int,
-                 clock: Callable[[], float] = time.monotonic):
+    def __init__(self, per_minute: int, per_day: int, global_per_day: int, clock: Callable[[], float] = time.monotonic):
         # Floor of 1: a zero limit would refuse everything and break Retry-After.
         self.per_minute = max(1, per_minute)
         self.per_day = max(1, per_day)
@@ -45,14 +44,19 @@ class ChatRateLimiter:
             _prune(self._global, now - DAY)
 
             if len(minute) >= self.per_minute:
-                return Limited("You're sending messages too quickly. Please wait a minute and try again.",
-                               _wait(minute[0] + MINUTE, now))
+                return Limited(
+                    "You're sending messages too quickly. Please wait a minute and try again.",
+                    _wait(minute[0] + MINUTE, now),
+                )
             if len(day) >= self.per_day:
-                return Limited("You've reached today's message limit. Please try again tomorrow.",
-                               _wait(day[0] + DAY, now))
+                return Limited(
+                    "You've reached today's message limit. Please try again tomorrow.", _wait(day[0] + DAY, now)
+                )
             if len(self._global) >= self.global_per_day:
-                return Limited("The assistant has reached its daily usage limit. Please try again tomorrow.",
-                               _wait(self._global[0] + DAY, now))
+                return Limited(
+                    "The assistant has reached its daily usage limit. Please try again tomorrow.",
+                    _wait(self._global[0] + DAY, now),
+                )
 
             for stamps in (minute, day, self._global):
                 stamps.append(now)

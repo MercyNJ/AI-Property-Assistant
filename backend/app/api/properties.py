@@ -21,7 +21,7 @@ def get_one(property_id: int, db: Session = Depends(get_db)) -> PropertyOut:
     try:
         return svc.get_property(db, property_id)
     except svc.PropertyNotFound:
-        raise HTTPException(status_code=404, detail=f"Property {property_id} was not found.")
+        raise HTTPException(status_code=404, detail=f"Property {property_id} was not found.") from None
 
 
 @router.get("/locations", response_model=list[LocationSummary])

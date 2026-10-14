@@ -76,7 +76,7 @@ class ConversationStore:
         user_idx = [i for i, it in enumerate(items) if it.get("role") == "user"]
         if len(user_idx) <= self.max_turns:
             return items
-        return items[user_idx[-self.max_turns]:]
+        return items[user_idx[-self.max_turns] :]
 
     def _evict(self) -> None:
         now = time.time()

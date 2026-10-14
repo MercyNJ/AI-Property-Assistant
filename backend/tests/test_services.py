@@ -44,19 +44,28 @@ def test_results_are_sorted_by_price_by_default(db):
     assert prices == sorted(prices)
 
 
-@pytest.mark.parametrize("loc,expected", [("nairobi", {"Westlands", "Kilimani", "Kasarani"}),
-                                          ("Kamakis", {"Ruiru"}), ("Machakos County", {"Syokimau"})])
+@pytest.mark.parametrize(
+    "loc,expected",
+    [("nairobi", {"Westlands", "Kilimani", "Kasarani"}), ("Kamakis", {"Ruiru"}), ("Machakos County", {"Syokimau"})],
+)
 def test_location_matches_town_county_or_neighbourhood(db, loc, expected):
     r = search(db, location=loc, limit=10)
     assert r.total_matches > 0
     assert {p.location for p in r.results} <= expected
 
 
-@pytest.mark.parametrize("phrase,expected", [
-    ("Westlands, Nairobi", "Westlands"), ("Ruiru, Kiambu County", "Ruiru"), ("Kasarani town", "Kasarani"),
-    ("Ruiru town", "Ruiru Town"),  # a real neighbourhood, so the more specific match wins
-    ("Kilimani area", "Kilimani"), ("Nairobi, Kenya", "Nairobi"), ("kamakis", "Kamakis"),
-])
+@pytest.mark.parametrize(
+    "phrase,expected",
+    [
+        ("Westlands, Nairobi", "Westlands"),
+        ("Ruiru, Kiambu County", "Ruiru"),
+        ("Kasarani town", "Kasarani"),
+        ("Ruiru town", "Ruiru Town"),  # a real neighbourhood, so the more specific match wins
+        ("Kilimani area", "Kilimani"),
+        ("Nairobi, Kenya", "Nairobi"),
+        ("kamakis", "Kamakis"),
+    ],
+)
 def test_location_phrasings_resolve_to_a_known_place(db, phrase, expected):
     r = search(db, location=phrase, limit=10)
     assert r.total_matches > 0 and r.criteria_applied["location"] == expected
@@ -64,9 +73,21 @@ def test_location_phrasings_resolve_to_a_known_place(db, phrase, expected):
 
 def test_stored_name_wins_over_an_alias(db):
     # "thika town" is an alias for Thika, but a neighbourhood with that exact name must not widen to all of Thika.
-    db.add(Property(id=9002, title="Test flat", location="Thika", neighbourhood="Thika Town", county="Kiambu",
-                    property_type="apartment", bedrooms=1, bathrooms=1, price_kes=20000, furnished=False,
-                    description="Test listing."))
+    db.add(
+        Property(
+            id=9002,
+            title="Test flat",
+            location="Thika",
+            neighbourhood="Thika Town",
+            county="Kiambu",
+            property_type="apartment",
+            bedrooms=1,
+            bathrooms=1,
+            price_kes=20000,
+            furnished=False,
+            description="Test listing.",
+        )
+    )
     db.flush()
     try:
         r = search(db, location="Thika Town", limit=10)
@@ -95,10 +116,19 @@ def test_welcome_example_kilimani_swimming_pool_finds_the_pool_listing(db):
     assert [p.id for p in r.results] == [27]  # its description says "pool", not "swimming pool"
 
 
-@pytest.mark.parametrize("phrase,equivalent", [
-    ("swimming pool", "pool"), ("swimming pools", "pool"), ("with a pool", "pool"), ("gyms", "gym"),
-    ("balconies", "balcony"), ("parking spaces", "parking"), ("servants' quarters", "DSQ"), ("wifi", "wi-fi"),
-])
+@pytest.mark.parametrize(
+    "phrase,equivalent",
+    [
+        ("swimming pool", "pool"),
+        ("swimming pools", "pool"),
+        ("with a pool", "pool"),
+        ("gyms", "gym"),
+        ("balconies", "balcony"),
+        ("parking spaces", "parking"),
+        ("servants' quarters", "DSQ"),
+        ("wifi", "wi-fi"),
+    ],
+)
 def test_keyword_phrasings_match_listing_wording(db, phrase, equivalent):
     expected = search(db, keywords=equivalent, limit=10)
     assert expected.total_matches > 0
@@ -107,9 +137,21 @@ def test_keyword_phrasings_match_listing_wording(db, phrase, equivalent):
 
 @pytest.mark.parametrize("query", ["balcony", "balconies"])
 def test_ies_plurals_match_both_spellings_in_listings(db, query):
-    db.add(Property(id=9001, title="Test flat", location="Thika", neighbourhood="Makongeni", county="Kiambu",
-                    property_type="apartment", bedrooms=2, bathrooms=1, price_kes=30000, furnished=False,
-                    description="Two balconies and a laundry area."))
+    db.add(
+        Property(
+            id=9001,
+            title="Test flat",
+            location="Thika",
+            neighbourhood="Makongeni",
+            county="Kiambu",
+            property_type="apartment",
+            bedrooms=2,
+            bathrooms=1,
+            price_kes=30000,
+            furnished=False,
+            description="Two balconies and a laundry area.",
+        )
+    )
     db.flush()
     try:
         assert 9001 in {p.id for p in search(db, keywords=query, location="Thika", limit=10).results}
@@ -195,8 +237,12 @@ def test_empty_env_values_fall_back_to_defaults(monkeypatch):
 
 
 def test_history_limit_below_one_keeps_one_turn():
-    items = [{"role": "user", "content": "a"}, {"role": "assistant", "content": "b"},
-             {"role": "user", "content": "c"}, {"role": "assistant", "content": "d"}]
+    items = [
+        {"role": "user", "content": "a"},
+        {"role": "assistant", "content": "b"},
+        {"role": "user", "content": "c"},
+        {"role": "assistant", "content": "d"},
+    ]
     assert ConversationStore(max_turns=0)._trim(items) == items[2:]
 
 
@@ -215,9 +261,18 @@ def test_tool_dispatch_validates_arguments(db):
 
 
 def test_tool_dispatch_ignores_nulls_and_clamps_limit(db):
-    args = {"location": "Thika", "property_type": None, "min_bedrooms": None, "max_bedrooms": None,
-            "min_bathrooms": None, "max_price_kes": None, "furnished": None, "keywords": None,
-            "sort_by": "price_desc", "limit": 50}
+    args = {
+        "location": "Thika",
+        "property_type": None,
+        "min_bedrooms": None,
+        "max_bedrooms": None,
+        "min_bathrooms": None,
+        "max_price_kes": None,
+        "furnished": None,
+        "keywords": None,
+        "sort_by": "price_desc",
+        "limit": 50,
+    }
     result = run_tool(db, "search_properties", json.dumps(args))
     data = json.loads(result.output)
     assert data["total_matches"] == 6 and len(data["results"]) == 6

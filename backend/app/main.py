@@ -28,8 +28,10 @@ async def lifespan(app: FastAPI):
             if added:
                 log.info("Seeded %d listings from %s", added, settings.seed_file.name)
     else:
-        log.warning("Seed file %s not found: an empty database will stay empty and every search will return 0.",
-                    settings.seed_file)
+        log.warning(
+            "Seed file %s not found: an empty database will stay empty and every search will return 0.",
+            settings.seed_file,
+        )
     if not settings.ai_configured:
         log.warning("OPENAI_API_KEY is not set: /api/chat will return 503 until it is configured.")
     yield
@@ -46,7 +48,9 @@ def create_app() -> FastAPI:
             return await call_next(request)
         except Exception:
             log.exception("Unhandled error")
-            return JSONResponse(status_code=500, content={"detail": "Something went wrong on our side. Please try again."})
+            return JSONResponse(
+                status_code=500, content={"detail": "Something went wrong on our side. Please try again."}
+            )
 
     app.add_middleware(
         CORSMiddleware,
@@ -62,8 +66,7 @@ def create_app() -> FastAPI:
     @app.exception_handler(RequestValidationError)
     async def validation_error(_: Request, exc: RequestValidationError):
         errors = [
-            {"field": ".".join(str(p) for p in e["loc"] if p != "body"), "message": e["msg"]}
-            for e in exc.errors()
+            {"field": ".".join(str(p) for p in e["loc"] if p != "body"), "message": e["msg"]} for e in exc.errors()
         ]
         return JSONResponse(status_code=422, content={"detail": "The request was invalid.", "errors": errors})
 

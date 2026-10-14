@@ -53,8 +53,9 @@ def _as_dict(item) -> dict:
 
 
 class PropertyAssistant:
-    def __init__(self, client, settings: Settings, store: ConversationStore,
-                 clock: Callable[[], float] = time.monotonic):
+    def __init__(
+        self, client, settings: Settings, store: ConversationStore, clock: Callable[[], float] = time.monotonic
+    ):
         self.client = client
         self.settings = settings
         self.store = store
@@ -73,8 +74,7 @@ class PropertyAssistant:
         conv = self.store.get(conversation_id)
         # A known ID with no stored history means it expired or the server restarted.
         history_reset = resuming and not conv.items
-        turn = _Turn(new_items=[{"role": "user", "content": message}],
-                     deadline=self.clock() + TURN_BUDGET_SECONDS)
+        turn = _Turn(new_items=[{"role": "user", "content": message}], deadline=self.clock() + TURN_BUDGET_SECONDS)
 
         try:
             reply = self._run(db, conv.items, turn)
@@ -82,7 +82,9 @@ class PropertyAssistant:
             raise self._map_openai_error(exc) from exc
         except SQLAlchemyError as exc:
             log.exception("Database error during chat")
-            raise AssistantError("The property database is unavailable right now. Please try again shortly.", 503) from exc
+            raise AssistantError(
+                "The property database is unavailable right now. Please try again shortly.", 503
+            ) from exc
 
         # Cards only for listings a tool returned in the retained history, so invented IDs never render.
         conv.turn_property_ids.append(list(dict.fromkeys(turn.surfaced_ids)))
@@ -173,9 +175,13 @@ class PropertyAssistant:
     def _map_openai_error(exc: openai.APIError) -> AssistantError:
         log.error("OpenAI error: %s: %s", type(exc).__name__, exc)
         if isinstance(exc, openai.AuthenticationError | openai.PermissionDeniedError):
-            return AssistantError("The AI service rejected the server's credentials. Check OPENAI_API_KEY on the backend.", 503)
+            return AssistantError(
+                "The AI service rejected the server's credentials. Check OPENAI_API_KEY on the backend.", 503
+            )
         if isinstance(exc, openai.RateLimitError):
-            return AssistantError("The AI service is busy or the usage quota has been reached. Please try again in a moment.", 429)
+            return AssistantError(
+                "The AI service is busy or the usage quota has been reached. Please try again in a moment.", 429
+            )
         if isinstance(exc, openai.APITimeoutError):
             return AssistantError("The AI service took too long to respond. Please try again.", 504)
         if isinstance(exc, openai.APIConnectionError):
@@ -188,8 +194,10 @@ class PropertyAssistant:
 def _refusal_text(response) -> str:
     parts = [
         part.refusal
-        for item in response.output if item.type == "message"
-        for part in getattr(item, "content", []) if part.type == "refusal"
+        for item in response.output
+        if item.type == "message"
+        for part in getattr(item, "content", [])
+        if part.type == "refusal"
     ]
     return " ".join(p.strip() for p in parts if p and p.strip())
 

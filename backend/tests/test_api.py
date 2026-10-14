@@ -49,9 +49,18 @@ def test_chat_validation(client):
 
 
 def test_chat_search_then_follow_up(client, use_fake_ai):
-    search_args = {"location": "Ruiru", "property_type": "apartment", "min_bedrooms": 3, "max_bedrooms": None,
-                   "min_bathrooms": None, "max_price_kes": 80000, "furnished": True, "keywords": None,
-                   "sort_by": "price_asc", "limit": None}
+    search_args = {
+        "location": "Ruiru",
+        "property_type": "apartment",
+        "min_bedrooms": 3,
+        "max_bedrooms": None,
+        "min_bathrooms": None,
+        "max_price_kes": 80000,
+        "furnished": True,
+        "keywords": None,
+        "sort_by": "price_asc",
+        "limit": None,
+    }
 
     def follow_up(kwargs):
         # The second turn must see the first turn's tool call and its results.
@@ -61,11 +70,13 @@ def test_chat_search_then_follow_up(client, use_fake_ai):
         assert not any("id" in i for i in items if i.get("type") == "function_call")
         return final("The lowest-priced is the Membley apartment at KES 52,000.", [2])
 
-    fake = use_fake_ai([
-        FakeResponse([function_call("search_properties", search_args)]),
-        final("I found 3 furnished 3-bedroom apartments in Ruiru within KES 80,000.", [2, 4, 5, 9999]),
-        follow_up,
-    ])
+    fake = use_fake_ai(
+        [
+            FakeResponse([function_call("search_properties", search_args)]),
+            final("I found 3 furnished 3-bedroom apartments in Ruiru within KES 80,000.", [2, 4, 5, 9999]),
+            follow_up,
+        ]
+    )
 
     r1 = client.post("/api/chat", json={"message": "Furnished 3 bed in Ruiru under 80k"})
     assert r1.status_code == 200
@@ -77,7 +88,9 @@ def test_chat_search_then_follow_up(client, use_fake_ai):
     second_call_input = fake.responses.calls[1]["input"]
     assert second_call_input[-1]["type"] == "function_call_output"
 
-    r2 = client.post("/api/chat", json={"message": "Which one is cheapest?", "conversation_id": body["conversation_id"]})
+    r2 = client.post(
+        "/api/chat", json={"message": "Which one is cheapest?", "conversation_id": body["conversation_id"]}
+    )
     assert r2.status_code == 200
     assert [p["id"] for p in r2.json()["properties"]] == [2]
     assert r2.json()["tool_calls"] == []
@@ -101,8 +114,11 @@ def test_malformed_reply_falls_back_to_text(client, use_fake_ai):
 
 
 def test_model_refusal_is_shown_as_a_reply(client, use_fake_ai):
-    refusal = FakeItem(type="message", role="assistant",
-                       content=[FakeItem(type="refusal", refusal="I can only help with rental listings.")])
+    refusal = FakeItem(
+        type="message",
+        role="assistant",
+        content=[FakeItem(type="refusal", refusal="I can only help with rental listings.")],
+    )
     use_fake_ai([FakeResponse([refusal], output_text="")])
     r = client.post("/api/chat", json={"message": "write me a poem"})
     assert r.status_code == 200
@@ -140,7 +156,10 @@ def _req():
 
 def test_openai_errors_are_friendly(client, use_fake_ai):
     cases = [
-        ([openai.AuthenticationError("bad key sk-secret", response=httpx.Response(401, request=_req()), body=None)], 503),
+        (
+            [openai.AuthenticationError("bad key sk-secret", response=httpx.Response(401, request=_req()), body=None)],
+            503,
+        ),
         ([openai.RateLimitError("slow down", response=httpx.Response(429, request=_req()), body=None)], 429),
         ([openai.APITimeoutError(request=_req())] * 2, 504),  # transient: retried once
         ([openai.APIConnectionError(request=_req())] * 2, 503),
@@ -212,6 +231,7 @@ def test_turn_over_budget_fails_with_504_and_saves_nothing(db):
 
 def test_missing_api_key(client, monkeypatch):
     from app.config import get_settings
+
     monkeypatch.setattr(get_settings(), "openai_api_key", "")
     r = client.post("/api/chat", json={"message": "hi"})
     assert r.status_code == 503 and "OPENAI_API_KEY" in r.json()["detail"]
@@ -225,9 +245,18 @@ def test_tool_loop_is_bounded(client, use_fake_ai):
 
 
 def _search(location: str) -> dict:
-    return {"location": location, "property_type": None, "min_bedrooms": None, "max_bedrooms": None,
-            "min_bathrooms": None, "max_price_kes": None, "furnished": None, "keywords": None,
-            "sort_by": "price_asc", "limit": None}
+    return {
+        "location": location,
+        "property_type": None,
+        "min_bedrooms": None,
+        "max_bedrooms": None,
+        "min_bathrooms": None,
+        "max_price_kes": None,
+        "furnished": None,
+        "keywords": None,
+        "sort_by": "price_asc",
+        "limit": None,
+    }
 
 
 def test_concurrent_turn_on_same_conversation_is_refused(db):
@@ -247,18 +276,26 @@ def test_concurrent_turn_on_same_conversation_is_refused(db):
     # The first turn was saved and the conversation is free again.
     assert assistant.chat(db, "third message", "c1").reply == "Third reply."
     assert [i["content"] for i in store.get("c1").items if i.get("role") == "user"] == [
-        "first message", "third message"]
+        "first message",
+        "third message",
+    ]
 
 
 def test_cards_are_limited_to_retained_history(db):
     store = ConversationStore(max_turns=1)
     thika_ids = [p.id for p in svc.search_properties(db, PropertySearchFilters(location="Thika")).results]
-    assistant = PropertyAssistant(FakeClient([
-        FakeResponse([function_call("search_properties", _search("Thika"))]),
-        final("Listings in Thika.", thika_ids[:1]),
-        final("That Thika listing again.", thika_ids[:1]),
-        final("And again.", thika_ids[:1]),
-    ]), get_settings(), store)
+    assistant = PropertyAssistant(
+        FakeClient(
+            [
+                FakeResponse([function_call("search_properties", _search("Thika"))]),
+                final("Listings in Thika.", thika_ids[:1]),
+                final("That Thika listing again.", thika_ids[:1]),
+                final("And again.", thika_ids[:1]),
+            ]
+        ),
+        get_settings(),
+        store,
+    )
 
     first = assistant.chat(db, "Thika rentals", None)
     cid = first.conversation_id

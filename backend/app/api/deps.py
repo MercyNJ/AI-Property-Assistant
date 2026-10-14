@@ -32,8 +32,7 @@ def enforce_chat_rate_limit(request: Request, limiter: ChatRateLimiter = Depends
     # Behind Render's proxy this is the forwarded client IP (see render.yaml).
     client = request.client.host if request.client else "unknown"
     if limited := limiter.check(client):
-        raise HTTPException(status_code=429, detail=limited.message,
-                            headers={"Retry-After": str(limited.retry_after)})
+        raise HTTPException(status_code=429, detail=limited.message, headers={"Retry-After": str(limited.retry_after)})
 
 
 def get_assistant() -> PropertyAssistant:

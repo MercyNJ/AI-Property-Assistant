@@ -33,20 +33,57 @@ TOOLS: list[dict] = [
         "parameters": {
             "type": "object",
             "properties": {
-                "location": _nullable({"type": "string", "description": "One place name: a town, neighbourhood or county, e.g. 'Ruiru', 'Kamakis', 'Nairobi'. Do not add the county or country."}),
+                "location": _nullable(
+                    {
+                        "type": "string",
+                        "description": (
+                            "One place name: a town, neighbourhood or county, e.g. 'Ruiru', 'Kamakis', 'Nairobi'. "
+                            "Do not add the county or country."
+                        ),
+                    }
+                ),
                 "property_type": _nullable({"type": "string", "enum": list(PROPERTY_TYPES)}),
-                "min_bedrooms": _nullable({"type": "integer", "description": "For an exact count ('3-bedroom') set min and max to the same number. Studios and bedsitters have 0 bedrooms."}),
-                "max_bedrooms": _nullable({"type": "integer", "description": "Equal to min_bedrooms for an exact count; alone only for 'up to N'."}),
+                "min_bedrooms": _nullable(
+                    {
+                        "type": "integer",
+                        "description": (
+                            "For an exact count ('3-bedroom') set min and max to the same number. "
+                            "Studios and bedsitters have 0 bedrooms."
+                        ),
+                    }
+                ),
+                "max_bedrooms": _nullable(
+                    {
+                        "type": "integer",
+                        "description": "Equal to min_bedrooms for an exact count; alone only for 'up to N'.",
+                    }
+                ),
                 "min_bathrooms": _nullable({"type": "integer"}),
                 "max_price_kes": _nullable({"type": "integer", "description": "Maximum monthly rent in KES."}),
                 "furnished": _nullable({"type": "boolean"}),
-                "keywords": _nullable({"type": "string", "description": "Short feature words that must all appear in the listing, e.g. 'pool', 'gym borehole', 'DSQ'. Use the core noun ('pool', not 'swimming pool'); no descriptive or filler words."}),
+                "keywords": _nullable(
+                    {
+                        "type": "string",
+                        "description": (
+                            "Short feature words that must all appear in the listing, e.g. 'pool', 'gym borehole', "
+                            "'DSQ'. Use the core noun ('pool', not 'swimming pool'); no descriptive or filler words."
+                        ),
+                    }
+                ),
                 "sort_by": {"type": "string", "enum": ["price_asc", "price_desc", "bedrooms_desc", "newest"]},
                 "limit": _nullable({"type": "integer", "description": "1-10, default 6."}),
             },
             "required": [
-                "location", "property_type", "min_bedrooms", "max_bedrooms", "min_bathrooms",
-                "max_price_kes", "furnished", "keywords", "sort_by", "limit",
+                "location",
+                "property_type",
+                "min_bedrooms",
+                "max_bedrooms",
+                "min_bathrooms",
+                "max_price_kes",
+                "furnished",
+                "keywords",
+                "sort_by",
+                "limit",
             ],
             "additionalProperties": False,
         },
@@ -66,7 +103,10 @@ TOOLS: list[dict] = [
     {
         "type": "function",
         "name": "compare_properties",
-        "description": "Compare 2-5 listings by ID on objective attributes (price, bedrooms, bathrooms, furnished, price per bedroom).",
+        "description": (
+            "Compare 2-5 listings by ID on objective attributes "
+            "(price, bedrooms, bathrooms, furnished, price per bedroom)."
+        ),
         "strict": True,
         "parameters": {
             "type": "object",
@@ -78,7 +118,9 @@ TOOLS: list[dict] = [
     {
         "type": "function",
         "name": "search_locations",
-        "description": "List supported locations with listing counts and rent ranges. Pass null to list all, or text to filter.",
+        "description": (
+            "List supported locations with listing counts and rent ranges. Pass null to list all, or text to filter."
+        ),
         "strict": True,
         "parameters": {
             "type": "object",
