@@ -18,6 +18,7 @@ export default function App() {
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- scroll whenever the conversation changes
   }, [messages, loading]);
 
   async function send(text: string) {

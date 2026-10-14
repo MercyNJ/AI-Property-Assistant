@@ -18,6 +18,7 @@ export function Composer({ onSend, disabled }: Props) {
     if (!el) return;
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight}px`;
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- re-measure whenever the text changes
   }, [text]);
 
   function submit(e?: FormEvent) {
@@ -44,6 +45,7 @@ export function Composer({ onSend, disabled }: Props) {
         placeholder="e.g. 2-bedroom in Kasarani under 35k, furnished"
         rows={1}
         aria-label="Message"
+        // oxlint-disable-next-line jsx-a11y/no-autofocus -- the message box is the page's primary input
         autoFocus
       />
       <button type="submit" className="btn-send" disabled={disabled || !trimmed}>

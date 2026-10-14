@@ -36,6 +36,7 @@ The API runs at http://localhost:8000, with interactive docs at http://localhost
 cd frontend
 npm install
 npm run dev
+npm run lint        # Oxlint, also run in CI
 ```
 
 Open http://localhost:5173. In development, Vite proxies `/api` to the backend, so no CORS setup or frontend env var is needed.
