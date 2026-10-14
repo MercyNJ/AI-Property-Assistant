@@ -1,11 +1,14 @@
 import httpx
 import openai
+import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import OperationalError
 
-from app.ai.assistant import AssistantError, PropertyAssistant
+from app.ai.assistant import TURN_BUDGET_SECONDS, AssistantError, PropertyAssistant
 from app.ai.conversation_store import ConversationStore
 from app.api.deps import get_assistant
 from app.config import get_settings
+from app.database import get_db
 from app.schemas import PropertySearchFilters
 from app.services import property_service as svc
 from tests.conftest import FakeClient, FakeItem, FakeResponse, final, function_call
@@ -14,6 +17,17 @@ from tests.conftest import FakeClient, FakeItem, FakeResponse, final, function_c
 def test_health(client):
     body = client.get("/api/health").json()
     assert body["database"] is True and body["listings"] == 55
+
+
+def test_health_is_503_when_database_is_down(client):
+    class BrokenSession:
+        def scalar(self, *_):
+            raise OperationalError("SELECT 1", {}, Exception("db down"))
+
+    client.app.dependency_overrides[get_db] = lambda: BrokenSession()
+    r = client.get("/api/health")
+    assert r.status_code == 503
+    assert r.json()["status"] == "degraded" and r.json()["database"] is False
 
 
 def test_get_property_404(client):
@@ -126,13 +140,13 @@ def _req():
 
 def test_openai_errors_are_friendly(client, use_fake_ai):
     cases = [
-        (openai.AuthenticationError("bad key sk-secret", response=httpx.Response(401, request=_req()), body=None), 503),
-        (openai.RateLimitError("slow down", response=httpx.Response(429, request=_req()), body=None), 429),
-        (openai.APITimeoutError(request=_req()), 504),
-        (openai.APIConnectionError(request=_req()), 503),
+        ([openai.AuthenticationError("bad key sk-secret", response=httpx.Response(401, request=_req()), body=None)], 503),
+        ([openai.RateLimitError("slow down", response=httpx.Response(429, request=_req()), body=None)], 429),
+        ([openai.APITimeoutError(request=_req())] * 2, 504),  # transient: retried once
+        ([openai.APIConnectionError(request=_req())] * 2, 503),
     ]
-    for exc, code in cases:
-        use_fake_ai([exc])
+    for script, code in cases:
+        use_fake_ai(script)
         r = client.post("/api/chat", json={"message": "hi"})
         assert r.status_code == code
         assert "sk-secret" not in r.text and "Traceback" not in r.text
@@ -152,6 +166,48 @@ def test_unhandled_error_is_generic_and_keeps_cors_headers(client):
     assert "secret internal detail" not in r.text
     # Without it, a cross-origin browser hides the response.
     assert r.headers.get("access-control-allow-origin") == "http://localhost:5173"
+
+
+class Clock:
+    def __init__(self):
+        self.now = 1000.0
+
+    def __call__(self):
+        return self.now
+
+
+def test_transient_openai_error_is_retried_once(db):
+    fake = FakeClient([openai.APIConnectionError(request=_req()), final("Recovered.", [])])
+    assistant = PropertyAssistant(fake, get_settings(), ConversationStore())
+    assert assistant.chat(db, "hi", None).reply == "Recovered."
+    assert len(fake.responses.calls) == 2
+
+
+def test_each_call_gets_at_most_the_remaining_turn_budget(db):
+    clock = Clock()
+
+    def slow_search(_):
+        clock.now += TURN_BUDGET_SECONDS - 10
+        return FakeResponse([function_call("search_properties", _search("Thika"))])
+
+    fake = FakeClient([slow_search, final("Done.", [])])
+    PropertyAssistant(fake, get_settings(), ConversationStore(), clock=clock).chat(db, "Thika", None)
+    assert fake.responses.calls[0]["timeout"] == get_settings().openai_timeout
+    assert fake.responses.calls[1]["timeout"] == 10
+
+
+def test_turn_over_budget_fails_with_504_and_saves_nothing(db):
+    clock, store = Clock(), ConversationStore()
+
+    def slow_search(_):
+        clock.now += TURN_BUDGET_SECONDS
+        return FakeResponse([function_call("search_properties", _search("Thika"))])
+
+    assistant = PropertyAssistant(FakeClient([slow_search]), get_settings(), store, clock=clock)
+    with pytest.raises(AssistantError) as err:
+        assistant.chat(db, "Thika", "c1")
+    assert err.value.status_code == 504
+    assert store.get("c1").items == []  # a retry starts clean instead of duplicating the turn
 
 
 def test_missing_api_key(client, monkeypatch):

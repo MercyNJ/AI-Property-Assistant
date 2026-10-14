@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -11,12 +11,14 @@ router = APIRouter(prefix="/api", tags=["health"])
 
 
 @router.get("/health")
-def health(db: Session = Depends(get_db)) -> dict:
+def health(response: Response, db: Session = Depends(get_db)) -> dict:
     try:
         listings = db.scalar(select(func.count(Property.id)))
         db_ok = True
     except SQLAlchemyError:
         listings, db_ok = None, False
+        # Render's health check only reads the status code.
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
     settings = get_settings()
     return {
         "status": "ok" if db_ok else "degraded",

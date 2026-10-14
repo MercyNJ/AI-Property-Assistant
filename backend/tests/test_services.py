@@ -7,7 +7,7 @@ from pydantic import ValidationError
 from app.ai.conversation_store import ConversationStore
 from app.ai.tools import TOOLS, run_tool
 from app.config import PROJECT_ROOT, Settings
-from app.models import PROPERTY_TYPES
+from app.models import PROPERTY_TYPES, Property
 from app.schemas import PropertySearchFilters
 from app.schemas.property import PropertyType
 from app.services import property_service as svc
@@ -62,6 +62,19 @@ def test_location_phrasings_resolve_to_a_known_place(db, phrase, expected):
     assert r.total_matches > 0 and r.criteria_applied["location"] == expected
 
 
+def test_stored_name_wins_over_an_alias(db):
+    # "thika town" is an alias for Thika, but a neighbourhood with that exact name must not widen to all of Thika.
+    db.add(Property(id=9002, title="Test flat", location="Thika", neighbourhood="Thika Town", county="Kiambu",
+                    property_type="apartment", bedrooms=1, bathrooms=1, price_kes=20000, furnished=False,
+                    description="Test listing."))
+    db.flush()
+    try:
+        r = search(db, location="Thika Town", limit=10)
+        assert r.criteria_applied["location"] == "Thika Town" and [p.id for p in r.results] == [9002]
+    finally:
+        db.rollback()
+
+
 def test_named_town_is_not_widened_to_its_county(db):
     r = search(db, location="Kiambu Town", limit=10)
     assert r.total_matches == 5 and {p.location for p in r.results} == {"Kiambu Town"}
@@ -90,6 +103,23 @@ def test_keyword_phrasings_match_listing_wording(db, phrase, equivalent):
     expected = search(db, keywords=equivalent, limit=10)
     assert expected.total_matches > 0
     assert search(db, keywords=phrase, limit=10).total_matches == expected.total_matches
+
+
+@pytest.mark.parametrize("query", ["balcony", "balconies"])
+def test_ies_plurals_match_both_spellings_in_listings(db, query):
+    db.add(Property(id=9001, title="Test flat", location="Thika", neighbourhood="Makongeni", county="Kiambu",
+                    property_type="apartment", bedrooms=2, bathrooms=1, price_kes=30000, furnished=False,
+                    description="Two balconies and a laundry area."))
+    db.flush()
+    try:
+        assert 9001 in {p.id for p in search(db, keywords=query, location="Thika", limit=10).results}
+    finally:
+        db.rollback()
+
+
+@pytest.mark.parametrize("word", ["study", "key", "gym", "pool", "dsq"])
+def test_short_words_are_not_over_trimmed(word):
+    assert svc._keyword_terms(word) == [word]
 
 
 def test_every_keyword_must_still_match(db):

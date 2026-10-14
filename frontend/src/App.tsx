@@ -60,7 +60,8 @@ export default function App() {
   return (
     <div className="app">
       <Header onNewChat={newChat} canReset={messages.length > 0 && !loading} />
-      <main className="chat">
+      {/* role="log" is a polite live region, so screen readers announce each reply or error as it is added. */}
+      <main className="chat" role="log" aria-label="Conversation">
         {messages.length === 0 ? (
           <Welcome onPick={send} />
         ) : (

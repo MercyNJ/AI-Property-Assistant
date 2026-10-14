@@ -2,6 +2,8 @@
 
 import json
 import logging
+import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 import openai
@@ -19,6 +21,9 @@ from app.services import property_service as svc
 log = logging.getLogger(__name__)
 
 MAX_TOOL_ROUNDS = 5
+# Whole-turn budget in seconds; must stay below the frontend's TIMEOUT_MS so a turn never outlives the request.
+TURN_BUDGET_SECONDS = 50
+MIN_CALL_SECONDS = 3
 
 
 class AssistantError(Exception):
@@ -40,6 +45,7 @@ class _Turn:
     new_items: list[dict] = field(default_factory=list)  # persisted to history
     tool_calls: list[ToolCallInfo] = field(default_factory=list)
     surfaced_ids: list[int] = field(default_factory=list)
+    deadline: float = 0.0
 
 
 def _as_dict(item) -> dict:
@@ -47,10 +53,12 @@ def _as_dict(item) -> dict:
 
 
 class PropertyAssistant:
-    def __init__(self, client, settings: Settings, store: ConversationStore):
+    def __init__(self, client, settings: Settings, store: ConversationStore,
+                 clock: Callable[[], float] = time.monotonic):
         self.client = client
         self.settings = settings
         self.store = store
+        self.clock = clock
 
     def chat(self, db: Session, message: str, conversation_id: str | None) -> ChatResponse:
         resuming = conversation_id is not None
@@ -65,7 +73,8 @@ class PropertyAssistant:
         conv = self.store.get(conversation_id)
         # A known ID with no stored history means it expired or the server restarted.
         history_reset = resuming and not conv.items
-        turn = _Turn(new_items=[{"role": "user", "content": message}])
+        turn = _Turn(new_items=[{"role": "user", "content": message}],
+                     deadline=self.clock() + TURN_BUDGET_SECONDS)
 
         try:
             reply = self._run(db, conv.items, turn)
@@ -97,7 +106,7 @@ class PropertyAssistant:
         working: list[dict] = list(history) + list(turn.new_items)
 
         for _ in range(MAX_TOOL_ROUNDS + 1):
-            response = self._create(working)
+            response = self._create(working, turn.deadline)
             calls = [item for item in response.output if item.type == "function_call"]
 
             if not calls:
@@ -118,7 +127,7 @@ class PropertyAssistant:
 
         raise AssistantError("The assistant could not complete that request. Please try rephrasing it.", 502)
 
-    def _create(self, input_items: list[dict]):
+    def _create(self, input_items: list[dict], deadline: float):
         kwargs = dict(
             model=self.settings.openai_model,
             instructions=SYSTEM_PROMPT,
@@ -130,7 +139,18 @@ class PropertyAssistant:
         )
         if self.settings.reasoning_effort:
             kwargs["reasoning"] = {"effort": self.settings.reasoning_effort}
-        return self.client.responses.create(**kwargs)
+
+        # SDK retries are off (deps.py) because they can sleep past the budget; retry transient failures here.
+        for attempt in range(2):
+            remaining = deadline - self.clock()
+            if remaining < MIN_CALL_SECONDS:
+                raise AssistantError("The assistant took too long to answer. Please try again.", 504)
+            try:
+                return self.client.responses.create(**kwargs, timeout=min(self.settings.openai_timeout, remaining))
+            except (openai.APIConnectionError, openai.InternalServerError) as exc:
+                if attempt:
+                    raise
+                log.warning("Retrying OpenAI call after %s", type(exc).__name__)
 
     @staticmethod
     def _parse_reply(response) -> AssistantReply:

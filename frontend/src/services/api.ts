@@ -2,6 +2,7 @@ import type { ChatResponse } from "../types";
 
 // Empty in development (Vite proxies /api); set VITE_API_URL to the backend origin in production.
 const API_URL = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
+// Above the backend's 50 s turn budget (TURN_BUDGET_SECONDS), so the server always answers first.
 const TIMEOUT_MS = 60_000;
 
 export class ApiError extends Error {}

@@ -28,7 +28,8 @@ class Settings:
     def __init__(self) -> None:
         self.openai_api_key: str = os.getenv("OPENAI_API_KEY", "").strip()
         self.openai_model: str = _str("OPENAI_MODEL", "gpt-5.4-mini")
-        self.openai_timeout: int = _int("OPENAI_TIMEOUT", 45)
+        # Per model call; each chat turn is also capped at assistant.TURN_BUDGET_SECONDS.
+        self.openai_timeout: int = _int("OPENAI_TIMEOUT", 25)
         # Empty for models that reject the reasoning parameter (e.g. gpt-4.1-mini).
         self.reasoning_effort: str = os.getenv("OPENAI_REASONING_EFFORT", "low").strip()
         self.database_url: str = _str("DATABASE_URL", f"sqlite:///{(BACKEND_DIR / 'properties.db').as_posix()}")

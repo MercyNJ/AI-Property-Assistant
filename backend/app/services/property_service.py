@@ -18,7 +18,7 @@ LOCATION_ALIASES = {
     "nbi": "nairobi",
 }
 
-# Feature phrases (singular form) mapped to the wording used in listings.
+# Feature phrases (in _stem form) mapped to the wording used in listings.
 KEYWORD_ALIASES = {
     "swimming pool": "pool",
     "parking space": "parking",
@@ -40,19 +40,23 @@ class PropertyNotFound(Exception):
         self.property_id = property_id
 
 
+def _plain(raw: str) -> str:
+    return " ".join(raw.lower().replace(",", " ").split())
+
+
 def _normalise_location(raw: str) -> str:
-    key = " ".join(raw.lower().replace(",", " ").split())
+    key = _plain(raw)
     for suffix in (" kenya", " county"):
         key = key.removesuffix(suffix)
     return LOCATION_ALIASES.get(key, key)
 
 
 def _location_candidates(raw: str) -> list[str]:
-    """Normalised keys to try, most specific first: 'Westlands, Nairobi' -> westlands nairobi, westlands."""
+    """Keys to try, most specific first; the exact phrase comes before aliases so a stored name always wins."""
     keys: list[str] = []
     for part in (raw, raw.split(",")[0]):
         key = _normalise_location(part)
-        keys.append(key)
+        keys += [_plain(part), key]
         for filler in (" area", " town"):
             if key.endswith(filler):
                 keys.append(_normalise_location(key.removesuffix(filler)))
@@ -68,8 +72,9 @@ def resolve_location(db: Session, raw: str) -> str | None:
     return next((names[k] for k in _location_candidates(raw) if k in names), None)
 
 
-def _location_match(raw: str):
-    key = _normalise_location(raw)
+def _location_match(name: str):
+    # `name` is already resolved by search_properties; unresolved input matches nothing either way.
+    key = name.lower()
     return or_(
         func.lower(Property.location) == key,
         func.lower(Property.county) == key,
@@ -83,17 +88,20 @@ def _contains(text: str) -> str:
     return f"%{escaped}%"
 
 
-def _singular(word: str) -> str:
-    # Only plurals need trimming: substring matching on "pool" already finds "pools".
+def _stem(word: str) -> str:
+    """A form that is a substring of both singular and plural: "pools" -> pool, "balconies" -> balcon."""
     if len(word) > 4 and word.endswith("ies"):
-        return word[:-3] + "y"
-    if len(word) > 3 and word.endswith("s") and not word.endswith("ss"):
-        return word[:-1]
+        word = word[:-3] + "y"
+    elif len(word) > 3 and word.endswith("s") and not word.endswith("ss"):
+        word = word[:-1]
+    # Consonant + "y" pluralises to "-ies"; short words keep the "y" so "study" doesn't match "studio".
+    if len(word) > 5 and word.endswith("y") and word[-2] not in "aeiou":
+        word = word[:-1]
     return word
 
 
 def _keyword_terms(keywords: str) -> list[str]:
-    text = " ".join(_singular(w) for w in keywords.lower().replace(",", " ").replace("'", "").split())
+    text = " ".join(_stem(w) for w in keywords.lower().replace(",", " ").replace("'", "").split())
     for phrase, replacement in KEYWORD_ALIASES.items():
         text = re.sub(rf"\b{re.escape(phrase)}\b", replacement, text)
     terms = [w for w in text.split() if w not in KEYWORD_STOP_WORDS]

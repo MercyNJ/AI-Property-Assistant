@@ -19,7 +19,7 @@ export function Message({ message: m, onRetry, busy }: Props) {
 
   if (m.role === "error") {
     return (
-      <div className="row" role="alert">
+      <div className="row">
         <div className="bubble bubble-error">
           <p>{m.text}</p>
           <button type="button" className="btn-link" onClick={() => onRetry(m.retryText)} disabled={busy}>
@@ -60,7 +60,7 @@ export function Message({ message: m, onRetry, busy }: Props) {
 
 export function Typing() {
   return (
-    <div className="row" aria-live="polite">
+    <div className="row">
       <div className="bubble bubble-assistant typing">
         <span />
         <span />

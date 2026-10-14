@@ -17,7 +17,8 @@ def get_conversation_store() -> ConversationStore:
 @lru_cache
 def _build_assistant() -> PropertyAssistant:
     settings = get_settings()
-    client = OpenAI(api_key=settings.openai_api_key, timeout=settings.openai_timeout, max_retries=2)
+    # Retries are handled in PropertyAssistant._create so they stay within the turn budget.
+    client = OpenAI(api_key=settings.openai_api_key, timeout=settings.openai_timeout, max_retries=0)
     return PropertyAssistant(client, settings, get_conversation_store())
 
 
