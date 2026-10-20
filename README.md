@@ -131,3 +131,7 @@ See `.env.example`. `OPENAI_MODEL` defaults to `gpt-5.4-mini`. Any Responses API
 - **Semantic search and recommendations:** see the embeddings note above. User preferences can become default filters that are injected into the tool arguments.
 - **Persistence:** a Redis or DB-backed `ConversationStore`.
 - **M-Pesa, notifications and admin:** separate services and routers. None of them change the assistant.
+
+## Future improvements
+
+- **Evaluation set.** A fixed list of test requests with the listings each should return, run against the real model after every prompt change. Each run is scored on whether wrong listings were shown and whether correct ones were missed, so a fix that breaks something else is caught.
